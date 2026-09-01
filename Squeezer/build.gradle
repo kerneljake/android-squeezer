@@ -84,6 +84,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+        }
         release {
             minifyEnabled true
             shrinkResources true
@@ -96,6 +100,17 @@ android {
             proguardFile "proguard-guava.cfg"
             proguardFile "proguard-cometd.cfg"
             proguardFile "proguard-squeezer.cfg"
+        }
+        staging {
+            // Inherit all identical code optimization/shrinking from production release
+            initWith release
+
+            // enable Logcat to be read later
+            debuggable true
+
+            applicationIdSuffix ".staging"
+            versionNameSuffix "-staging"
+            signingConfig signingConfigs.debug // Uses debug key for easy local installation
         }
     }
     lint {
