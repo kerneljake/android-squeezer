@@ -369,6 +369,21 @@ public class SqueezeService extends Service {
      */
     private void updateMediaSession() {
         Player player = mDelegate.getActivePlayer();
+
+        // DIAGNOSTIC TRACE INJECTION:
+        // Safely isolate the incoming source volume and the caller signature
+        // right as this operational frame hits the media session pipeline.
+        if (player != null && player.getPlayerState() != null) {
+             Log.d("SQUEEZER_DEBUG", "=================================================");
+                        Log.d("SQUEEZER_DEBUG", "updateMediaSession CALL DETECTED!");
+                        Log.d("SQUEEZER_DEBUG", "Source Hardware Vol: " + player.getPlayerState().getCurrentVolume());
+                        Log.d("SQUEEZER_DEBUG", "Is Playing Status  : " + isPlaying());
+                        Log.d("SQUEEZER_DEBUG", "Trace Execution Path: \n" + Log.getStackTraceString(new Throwable()));
+                        Log.d("SQUEEZER_DEBUG", "=================================================");
+        } else if (player == null) {
+                        Log.d("SQUEEZER_DEBUG", "updateMediaSession hit with NULL Active Player!");
+        }
+
         if (player == null) {
             mediaSession.setMetadata(null);
             mediaSession.setPlaybackState(null);
@@ -398,6 +413,12 @@ public class SqueezeService extends Service {
         }
 
         int playState = isPlaying() ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_STOPPED;
+
+        // TRACK BINDER PAYLOAD:
+        // Log the exact integer metrics passing over the IPC binder boundary
+        // to the Android OS before mediaSession.setPlaybackState consumes it.
+        Log.d("SQUEEZER_DEBUG", "IPC Payload -> playState: " + playState + " | position: " + player.getPlayerState().getPosition());
+
         PlaybackStateCompat playbackState = new PlaybackStateCompat.Builder()
                 .setState(playState, player.getPlayerState().getPosition(), isPlaying() ? 1.0f : 0, SystemClock.elapsedRealtime())
                 .setActions(
