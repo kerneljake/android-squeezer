@@ -488,6 +488,43 @@ class CometClient extends BaseClient {
     }
 
     private void parseMenuStatus(ClientSessionChannel channel, Message message) {
+        Object rawData = message.getData();
+
+        // 1. Check if the server returned an error map container (HashMap) instead of an array
+        if (rawData instanceof java.util.Map) {
+            java.util.Map<?, ?> errorMap = (java.util.Map<?, ?>) rawData;
+            String errorMsg = (String) errorMap.get("error");
+            Log.w("SQUEEZER_DEBUG", "Server returned an operational error: " + errorMsg);
+            return; // Exit safely without crashing the thread
+        }
+
+        // 2. Validate baseline array requirements before executing the primary cast
+        if (!(rawData instanceof Object[])) {
+            Log.w("SQUEEZER_DEBUG", "parseMenuStatus dropped: unexpected payload structural layout.");
+            return;
+        }
+        Object[] data = (Object[]) rawData;
+
+        // each chunk.data[2] contains a table that needs insertion into the menu
+        Object[] item_data = (Object[]) data[1];
+        JiveItem[] menuItems = new JiveItem[item_data.length];
+        for (int i = 0; i < item_data.length; i++) {
+            Map<String, Object> record = (Map<String, Object>) item_data[i];
+            patchUrlPrefix(record);
+            menuItems[i] = new JiveItem(record);
+        }
+
+        // directive for these items is in chunk.data[3]
+        String menuDirective = (String) data[2];
+
+        // the player ID this notification is for is in chunk.data[4]
+        String playerId = (String) data[3];
+
+        mConnectionState.menuStatusEvent(new MenuStatusMessage(playerId, menuDirective, menuItems));
+    }
+
+    /*
+    private void parseMenuStatus(ClientSessionChannel channel, Message message) {
         Object[] data = (Object[]) message.getData();
 
         // each chunk.data[2] contains a table that needs insertion into the menu
@@ -507,6 +544,7 @@ class CometClient extends BaseClient {
 
         mConnectionState.menuStatusEvent(new MenuStatusMessage(playerId, menuDirective, menuItems));
     }
+    */
 
     /**
      * Add endpoint to fetch further info from a slimserver item

@@ -369,10 +369,45 @@ public class SqueezeService extends Service {
      */
     private void updateMediaSession() {
         Player player = mDelegate.getActivePlayer();
+
+        // --- DIAGNOSTIC INSTRUMENTATION START ---
+        if (player != null && player.getPlayerState() != null) {
+            Log.d("SQUEEZER_DEBUG", ">>>>>>> updateMediaSession ENTRY START <<<<<<<");
+            Log.d("SQUEEZER_DEBUG", "Current UI Player ID  : " + player.getId());
+            Log.d("SQUEEZER_DEBUG", "Current UI Player Name: " + player.getName());
+            Log.d("SQUEEZER_DEBUG", "Internal Cache Volume : " + player.getPlayerState().getCurrentVolume());
+            Log.d("SQUEEZER_DEBUG", "Internal Cache Status : " + player.getPlayerState().getPlayStatus());
+            Log.d("SQUEEZER_DEBUG", "Triggered by Thread   : " + Thread.currentThread().getName());
+            Log.d("SQUEEZER_DEBUG", "Execution Trace       : \n" + Log.getStackTraceString(new Throwable()));
+        } else {
+            Log.d("SQUEEZER_DEBUG", "updateMediaSession invoked with NULL player/state reference.");
+        }
+        // --- DIAGNOSTIC INSTRUMENTATION END ---
+
+        // --- ITERATIVE RESOLUTION FIX ---
+        // If the player state fields are still in their raw startup phase (playStatus is null)
+        // during an onPlayersChanged() re-indexing cycle, return immediately. This prevents
+        // a transient volume level 0 from being sent over the binder to the OS.
+        if (player != null && player.getPlayerState() != null) {
+            if (player.getPlayerState().getPlayStatus() == null) {
+                Log.d("SQUEEZER_DEBUG", "Handshake guard triggered: Dropped uninitialized state frame.");
+                return;
+            }
+        }
+
+
         if (player == null) {
             mediaSession.setMetadata(null);
             mediaSession.setPlaybackState(null);
             notify(null);
+            return;
+        }
+
+        // SAFE TYPE-GUARD: If the player state object is currently mid-handshake
+        // and hasn't parsed its core playStatus metadata variables yet, bail
+        // out early to avoid overwriting the active GUI volume slider layout.
+        if ("null".equals(player.getPlayerState().getPlayStatus())) {
+            Log.d("SQUEEZER_DEBUG", "Bailed out of updateMediaSession - PlayerState is uninitialized");
             return;
         }
 
@@ -398,6 +433,14 @@ public class SqueezeService extends Service {
         }
 
         int playState = isPlaying() ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_STOPPED;
+
+        // --- IPC BINDER PAYLOAD LOGGING START ---
+        if (player != null && player.getPlayerState() != null) {
+            Log.d("SQUEEZER_DEBUG", "Outbound IPC -> playState: " + playState + " | position: " + player.getPlayerState().getPosition() + " | volume calculation step: " + (player.getPlayerState().getCurrentVolume() / 5));
+            Log.d("SQUEEZER_DEBUG", ">>>>>>> updateMediaSession ENTRY END <<<<<<<");
+        }
+        // --- IPC BINDER PAYLOAD LOGGING END ---
+
         PlaybackStateCompat playbackState = new PlaybackStateCompat.Builder()
                 .setState(playState, player.getPlayerState().getPosition(), isPlaying() ? 1.0f : 0, SystemClock.elapsedRealtime())
                 .setActions(

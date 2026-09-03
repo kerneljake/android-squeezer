@@ -861,9 +861,46 @@ public class NowPlayingFragment extends Fragment  implements CallStateDialog.Cal
         if (mFullHeightLayout) {
             Preferences preferences = Squeezer.getPreferences();
             VolumeUpdater updater = preferences.isLargeArtwork() ? preferences.nowPlayingVolume() ? volumeBar : null : volumeWheel;
+
+            // --- DIAGNOSTIC LOG INJECTION START ---
+            if (updater != null && requireService() != null) {
+                int retrievedVolume = requireService().getVolume().volume;
+
+                // Flag and isolate when a volume of 0 is being pushed to the visual screen layout
+                if (retrievedVolume == 0) {
+                    Log.d("SQUEEZER_DEBUG", "!!!! GUI VOLUME DROP ENCOUNTERED !!!!");
+                    Log.d("SQUEEZER_DEBUG", "Target Widget Class: " + updater.getClass().getSimpleName());
+                    Log.d("SQUEEZER_DEBUG", "Retrieved Volume   : " + retrievedVolume);
+                    Log.d("SQUEEZER_DEBUG", "UI Caller Path Trace:\n" + Log.getStackTraceString(new Throwable()));
+                }
+            }
+            // --- DIAGNOSTIC LOG INJECTION END ---
+
+            // --- ITERATIVE RESOLUTION FIX ---
+            // If the background service player state context is currently mid-handshake
+            // (returning an uninitialized volume container phase), block the layout pass
+            // to stop the circular wheel dial from jumping to zero.
+            if (requireService() != null && requireService().getActivePlayer() != null) {
+                if (requireService().getActivePlayer().getPlayerState().getPlayStatus() == null) {
+                    Log.d("SQUEEZER_DEBUG", "GUI Guard Engaged: Blocked transient volume jump on wheel.");
+                    return;
+                }
+            }
+
             if (updater != null) updater.update(requireService().getVolume());
         }
     }
+
+
+    /*
+    private void updateVolumeInfo() {
+        if (mFullHeightLayout) {
+            Preferences preferences = Squeezer.getPreferences();
+            VolumeUpdater updater = preferences.isLargeArtwork() ? preferences.nowPlayingVolume() ? volumeBar : null : volumeWheel;
+            if (updater != null) updater.update(requireService().getVolume());
+        }
+    }
+    */
 
     private JiveItem findBrowseAction(List<JiveItem> items, String ... idParams) {
         for (String idParam : idParams) {

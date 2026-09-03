@@ -31,6 +31,10 @@ public class Player extends Item implements Comparable<Player> {
 
     private String mName;
 
+    public PlayerState getmPlayerState() {
+        return mPlayerState;
+    }
+
     private final String mIp;
 
     private final String mModel;
